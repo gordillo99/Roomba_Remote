@@ -580,20 +580,6 @@ void setup() {
 
 	TIMSK1 |= (1 << OCIE1A);    /** Enable timer compare interrupt */
 
-	/** Timer 3 */
-	TCCR3A = 0;                 /** Set TCCR0A register to 0 */
-	TCCR3B = 0;                 /** Set TCCR0B register to 0 */
-
-	TCNT3 = 0;                  /** Initialize counter to 0 */
-
-	OCR3A = 62499;              /** Compare match register (TOP comparison value) [(16MHz/(100Hz*8)] - 1 */
-
-	TCCR3B |= (1 << WGM32);     /** Turns on CTC mode (TOP is now OCR1A) */
-
-	TCCR3B |= (1 << CS32);      /** Prescaler 1024 */
-
-	TIMSK3 = (1 << OCIE3A);
-
 	Enable_Interrupt();
 }
 
