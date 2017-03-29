@@ -177,6 +177,7 @@ void move_servo()
 				turn_servo_right();
 			else if(OCR3C > servo_target)
 				turn_servo_left();
+			Task_Next();
 		}
 	}
 }
