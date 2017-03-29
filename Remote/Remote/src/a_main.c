@@ -1,7 +1,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include "os.h"
-#include "Roomba_Driver.h"
+//#include "Roomba_Driver.h"
 
 /*
 #include "./tests/TEST_too_many_tasks.h"
@@ -15,7 +15,7 @@
 #include "./tests/TEST_chan_send_recieve.h"
 */
 
-Roomba r(2, 30);
+//Roomba r(2, 30);
 
 //Values for digital operations
 const unsigned int LOW = 0;
@@ -75,10 +75,10 @@ const int left_fast = 7;
 
 // CONSTANT PIN ASSIGNATIONS
 const int laser_activation_pin = 3; // the number of the laster activation pin
-const int photoresitor_pin = A15;
+//const int photoresitor_pin = A15;
 
 // GLOBAL STATUS VARIABLES
-bool firing_laser = false; // global variable for current state of laser
+BOOL firing_laser = FALSE; // global variable for current state of laser
 volatile int servo_1_dir = 0; // -1 (backward), 0 (static), 1 (forward)
 volatile int servo_2_dir = 0; // -1 (backward), 0 (static), 1 (forward)
 volatile int roomba1_dir = 0;// -1 (backward), 0 (static), 1 (forward)
@@ -122,80 +122,66 @@ void fire_laser(int command) {
 	}
 }
 
-int servo_init() {
+static unsigned int servo_target;
+
+int servo_timer_init() {
 	
-	//Set PB7 (pin 13) to output
+	//Set PE5 (pin 3) to output
 	//(If we wanted to write to the pin use 'PORTB |= (1<<PB7)' to turn it on, and 'PORTB &= ~(1<<PB7)' to turn it off.
 	// For the purposes of this example the pin will be controlled directly by timer 1.
-	DDRB = (1<<PB7);
-	
-	//Clear timer config.
-	TCCR3A = 0;
-	TCCR3B = 0;
-	//Set to CTC (mode 4)
-	TCCR3B |= (1<<WGM32);
-	
-	//Set prescaler to 256
-	TCCR3B |= (1<<CS32);
-	
-	//Set TOP value (0.05 seconds)
-	OCR3A = 3438;
-	
-	//Enable interupt A for timer 3.
-	TIMSK3 |= (1<<OCIE3A);
-	
-	//Set timer to 0 (optional here).
-	TCNT3 = 0;
-	
-	//=======================
+	DDRE = (1<<PB5);
 	
 	//PWM
 	//Clear timer config
-	TCCR1A = 0;
-	TCCR1B = 0;
-	TIMSK1 &= ~(1<<OCIE1C);
+	TCCR3A = 0;
+	TCCR3B = 0;
+	TIMSK3 &= ~(1<<OCIE3C);
 	//Set to Fast PWM (mode 15)
-	TCCR1A |= (1<<WGM10) | (1<<WGM11);
-	TCCR1B |= (1<<WGM12) | (1<<WGM13);
+	TCCR3A |= (1<<WGM30) | (1<<WGM31);
+	TCCR3B |= (1<<WGM32) | (1<<WGM33);
 	
 	//Enable output C.
-	TCCR1A |= (1<<COM1C1);
-	//No prescaler
-	TCCR1B |= (1<<CS12);
+	TCCR3A |= (1<<COM3C1);
+	//prescaler
+	TCCR3B |= (1<<CS32);
 	
-	OCR1A = 1250;  //20 ms period
-	OCR1C = 70;  //Target
-
+	OCR3A = 1250;  //20 ms period
 	
 }
-
-static int direction_flag;
 
 void servo_init(){
-	if(OCR1C < 97)
-	turn_right();
-	else if(OCR1C > 97)
-	turn_left();
+	servo_timer_init();
+	servo_target = 95;
 }
 
-void turn_right(void){
-	direction_flag = 1;
+void turn_servo_right(void){
+	if(servo_target >= 130)
+		return;
+	OCR3C += 1;
 }
 
-void turn_left(void){
-	direction_flag = -1;
+void turn_servo_left(void){
+	if(servo_target <= 65)
+		return;
+	OCR3C -= 1;
 }
 
-ISR(TIMER3_COMPA_vect)
+void move_servo()
 {
 	//Slowly incrase the duty cycle of the LED.
 	// Could change OCR1A to increase/decrease the frequency also.
-	if(OCR1C >= 130 || OCR1C <= 65) {
-		return;
+
+	while(1){
+		if(OCR3C != servo_target){
+			if(OCR3C < servo_target)
+				turn_servo_right();
+			else if(OCR3C > servo_target)
+				turn_servo_left();
+		}
 	}
-	OCR1C += direction_flag;
 }
 
+/*
 void move_servo_left(Servo servo) {
 	int pos = servo.read();
 
@@ -211,9 +197,9 @@ void move_servo_right(Servo servo) {
 		servo.write(pos + 1);
 	}
 }
-
-
+*/
 void a_main()
 {
-
+	Task_Create_System(servo_init, 0);
+	Task_Create_Period(move_servo, 0, 2, 1, 0);
 }

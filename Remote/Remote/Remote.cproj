@@ -141,20 +141,12 @@
     <Compile Include="src\queue.h">
       <SubType>compile</SubType>
     </Compile>
-    <Compile Include="src\Roomba_Driver.h">
-      <SubType>compile</SubType>
-    </Compile>
     <Compile Include="src\uart.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\uart.h">
       <SubType>compile</SubType>
     </Compile>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="src\Roomba_Driver.cpp">
-      <SubType>compile</SubType>
-    </None>
   </ItemGroup>
   <Import Project="$(AVRSTUDIO_EXE_PATH)\\Vs\\Compiler.targets" />
 </Project>
