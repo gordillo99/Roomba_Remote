@@ -41,7 +41,9 @@ C_SRCS +=  \
 ../src/a_main.c \
 ../src/os.c \
 ../src/queue.c \
-../src/uart.c
+../src/roomba.c \
+../src/uart.c \
+../src/utils.c
 
 
 PREPROCESSING_SRCS +=  \
@@ -56,28 +58,36 @@ src/a_main.o \
 src/cswitch.o \
 src/os.o \
 src/queue.o \
-src/uart.o
+src/roomba.o \
+src/uart.o \
+src/utils.o
 
 OBJS_AS_ARGS +=  \
 src/a_main.o \
 src/cswitch.o \
 src/os.o \
 src/queue.o \
-src/uart.o
+src/roomba.o \
+src/uart.o \
+src/utils.o
 
 C_DEPS +=  \
 src/a_main.d \
 src/cswitch.d \
 src/os.d \
 src/queue.d \
-src/uart.d
+src/roomba.d \
+src/uart.d \
+src/utils.d
 
 C_DEPS_AS_ARGS +=  \
 src/a_main.d \
 src/cswitch.d \
 src/os.d \
 src/queue.d \
-src/uart.d
+src/roomba.d \
+src/uart.d \
+src/utils.d
 
 OUTPUT_FILE_PATH +=Remote.elf
 
@@ -93,6 +103,10 @@ LINKER_SCRIPT_DEP+=
 
 
 # AVR32/GNU C Compiler
+
+
+
+
 
 
 

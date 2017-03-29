@@ -141,10 +141,28 @@
     <Compile Include="src\queue.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="src\roomba.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\roomba.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\roomba_sci.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\sensor_struct.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="src\uart.c">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="src\uart.h">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\utils.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="src\utils.h">
       <SubType>compile</SubType>
     </Compile>
   </ItemGroup>
