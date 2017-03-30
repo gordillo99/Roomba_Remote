@@ -89,7 +89,8 @@ volatile int roomba2_dir = 0;// -1 (backward), 0 (static), 1 (forward)
 void poll_incoming_commands() {
 	// poll for incoming commands
 	while(1){
-		if(uart1_rx) {
+		uart_putchar('c');
+		if(uart1_rx == 26116) {
 			int command = (int)uart1_getchar();
 			//Serial.println(command);
 			switch(command) {
@@ -154,6 +155,9 @@ void poll_incoming_commands() {
 			}
 			uart_putchar(roomba1_dir);
 			uart_putchar(roomba2_dir);
+		}
+		if('c' == uart1_getchar()){
+			uart1_putchar('d');
 		}
 		Task_Next();
 	}
@@ -366,8 +370,8 @@ void a_main()
 	Task_Create_System(serial_init, 0);
 	Task_Create_System(Roomba_Init, 0); //Roomba is on pin 13, and uart0
 	Task_Create_System(pin_init, 0);
-	Task_Create_Period(move_servo, 0, 2, 1, 1);
-	Task_Create_Period(poll_incoming_commands, 0, 5, 1, 2);
-	Task_Create_Period(move_roomba, 0, 2, 1, 1);
-	Task_Create_Period(send_status, 0, 10, 1, 5);
+	Task_Create_RR(move_servo, 0);
+	Task_Create_RR(poll_incoming_commands, 0);
+	Task_Create_RR(move_roomba, 0);
+	//Task_Create_RR(send_status, 0);
 }

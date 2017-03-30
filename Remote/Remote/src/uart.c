@@ -63,7 +63,7 @@ void uart1_init(){
     PRR1 &= ~(1 << PRUSART1);
 
     // Set baud rate to 19.2k at fOSC = 16 MHz
-    UBRR1 = 103;
+    UBRR1 = 51;
 
     // Clear USART Transmit complete flag, normal USART transmission speed
     UCSR1A = (1 << TXC1) | (0 << U2X1);
