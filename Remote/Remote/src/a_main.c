@@ -5,18 +5,6 @@
 #include "utils.h"
 #include "uart.h"
 
-/*
-#include "./tests/TEST_too_many_tasks.h"
-#include "./tests/TEST_priority.h"
-#include "./tests/TEST_system_task_scheduling.h"
-#include "./tests/TEST_rr_task_scheduling.h"
-#include "./tests/TEST_periodic_task_scheduling.h"
-#include "./tests/TEST_Task_Next.h"
-#include "./tests/TEST_periodic_task_overlap.h"
-#include "./tests/TEST_periodic_task_timing.h"
-#include "./tests/TEST_chan_send_recieve.h"
-*/
-
 //Values for digital operations
 const unsigned int LOW = 0;
 const unsigned int HIGH = 1;
@@ -78,11 +66,11 @@ const int laser_activation_pin = 25; // the number of the laster activation pin
 const int photoresitor_pin = 7;
 
 // GLOBAL STATUS VARIABLES
-BOOL firing_laser = FALSE; // global variable for current state of laser
-int servo_1_dir = 0; // -1 (backward), 0 (static), 1 (forward)
-int servo_2_dir = 0; // -1 (backward), 0 (static), 1 (forward)
-int roomba1_dir = 0;// -1 (backward), 0 (static), 1 (forward)
-int roomba2_dir = 0;// -1 (backward), 0 (static), 1 (forward)
+volatile BOOL firing_laser = FALSE; // global variable for current state of laser
+volatile int servo_1_dir = 0; // -1 (backward), 0 (static), 1 (forward)
+volatile int servo_2_dir = 0; // -1 (backward), 0 (static), 1 (forward)
+volatile int roomba1_dir = 0;// -1 (backward), 0 (static), 1 (forward)
+volatile int roomba2_dir = 0;// -1 (backward), 0 (static), 1 (forward)
 
 //Servo myServo, myServo2; //The two servo motors. myServo attached to digital pin 9 and myServo2 attached to digital pin 8
 
@@ -92,7 +80,10 @@ void poll_incoming_commands() {
 	int command, previous_command;
 	
 	while(1){
-		command = (int)uart1_getchar();
+	PORTB ^= (1<<PB3);
+		command = (int) uart1_getchar();
+		//uart_putchar(uart1_getchar());
+		
 		if(command != previous_command) {
 			previous_command = command;
 			
@@ -160,16 +151,16 @@ void poll_incoming_commands() {
 			}
 			
 		}
-		uart1_putchar((char)command);
+		
 		Task_Next();
 	}
 }
 
 void fire_laser(int command) {
 	if (command == offlaser) {
-			write_PORTA_LOW(laser_activation_pin); //pin MUST be on port A !!!!!!!!
-		} else if(command == firelaser) {
-			write_PORTA_HIGH(laser_activation_pin); //pin MUST be on port A
+		PORTA &= ~(1<<PA3); // PIN 25 
+	} else if(command == firelaser) {
+		PORTA |= (1<<PA3); // PIN 25 FOR LASER
 	}
 }
 
@@ -299,30 +290,6 @@ void move_roomba() {
 	}
 }
 
-void send_status() {
-	
-	int photoresistor_val;
-	BOOL light_on_photoresistor;
-	while(1){
-		photoresistor_val = read_ADC(photoresitor_pin);
-		light_on_photoresistor = photoresistor_val > 400;
-		if (light_on_photoresistor) { 
-			if (roomba1_dir == left_fast) uart1_putchar(80);
-			else if (roomba1_dir == right_fast) uart1_putchar(81);
-			else if (roomba2_dir == forward_fast) uart1_putchar(82);
-			else if (roomba2_dir == backward_fast) uart1_putchar(83);
-			else if (roomba1_dir == stopped && roomba2_dir == stopped) uart1_putchar(84);
-			} else {
-			if (roomba1_dir == left_fast) uart1_putchar(112);
-			else if (roomba1_dir == right_fast) uart1_putchar(113);
-			else if (roomba2_dir == forward_fast) uart1_putchar(114);
-			else if (roomba2_dir == backward_fast) uart1_putchar(115);
-			else if (roomba1_dir == stopped && roomba2_dir == stopped) uart1_putchar(116);
-		}
-		Task_Next();
-	}
-}
-
 int servo_timer_init() {
 	
 	//Set PE5 (pin 3) to output
@@ -350,6 +317,7 @@ int servo_timer_init() {
 
 void servo_init(){
 	servo_timer_init();
+	Task_Terminate();
 }
 
 void serial_init()
@@ -357,6 +325,8 @@ void serial_init()
 	// initialize serial communication at 19 200 bits per second:
 	uart_init();
 	uart1_init();
+	Roomba_Init();
+	Task_Terminate();
 }
 
 void pin_init()
@@ -364,18 +334,21 @@ void pin_init()
 	// initialize laser related pins
 	mode_PORTA_OUTPUT(laser_activation_pin);
 	init_ADC();
+	Task_Terminate();
 }
 
 void a_main()
 {
 	Task_Create_System(servo_init, 0);
 	Task_Create_System(serial_init, 0);
-	Task_Create_System(Roomba_Init, 0); //Roomba is on pin 13, and uart0
 	Task_Create_System(pin_init, 0);
 	//Task_Create_RR(move_servo, 0);
 	DDRB |= (1<<PB3);
-	PORTB |= (1<<PB3);
+	DDRB |= (1<<PB2);
+	PORTB &= ~(1<<PB2);
+	//PORTB |= (1<<PB3);
 	Task_Create_Period(poll_incoming_commands, 0, 4, 2, 2);
 	//Task_Create_RR(move_roomba, 0);
 	//Task_Create_RR(send_status, 0);
+	Task_Terminate();
 }

@@ -88,7 +88,11 @@ void uart1_putchar (char c)
 
 char uart1_getchar()
 {
-    while(!(UCSR1A & (1<<RXC1)));
+	int x = 0;
+    while(!(UCSR1A & (1<<RXC1))){
+		x++;
+		if (x > 10000) return '\n'; 
+	}
     return UDR1;
 }
 
