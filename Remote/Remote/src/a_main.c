@@ -1,21 +1,9 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include "os.h"
-//#include "Roomba_Driver.h"
-
-/*
-#include "./tests/TEST_too_many_tasks.h"
-#include "./tests/TEST_priority.h"
-#include "./tests/TEST_system_task_scheduling.h"
-#include "./tests/TEST_rr_task_scheduling.h"
-#include "./tests/TEST_periodic_task_scheduling.h"
-#include "./tests/TEST_Task_Next.h"
-#include "./tests/TEST_periodic_task_overlap.h"
-#include "./tests/TEST_periodic_task_timing.h"
-#include "./tests/TEST_chan_send_recieve.h"
-*/
-
-//Roomba r(2, 30);
+#include "roomba.h"
+#include "utils.h"
+#include "uart.h"
 
 //Values for digital operations
 const unsigned int LOW = 0;
@@ -74,11 +62,11 @@ const int right_fast = 6;
 const int left_fast = 7;
 
 // CONSTANT PIN ASSIGNATIONS
-const int laser_activation_pin = 3; // the number of the laster activation pin
-//const int photoresitor_pin = A15;
+const int laser_activation_pin = 25; // the number of the laster activation pin
+const int photoresitor_pin = 7;
 
 // GLOBAL STATUS VARIABLES
-BOOL firing_laser = FALSE; // global variable for current state of laser
+volatile BOOL firing_laser = FALSE; // global variable for current state of laser
 volatile int servo_1_dir = 0; // -1 (backward), 0 (static), 1 (forward)
 volatile int servo_2_dir = 0; // -1 (backward), 0 (static), 1 (forward)
 volatile int roomba1_dir = 0;// -1 (backward), 0 (static), 1 (forward)
@@ -86,51 +74,243 @@ volatile int roomba2_dir = 0;// -1 (backward), 0 (static), 1 (forward)
 
 //Servo myServo, myServo2; //The two servo motors. myServo attached to digital pin 9 and myServo2 attached to digital pin 8
 
-/**** PORTA Digital Pins ******/
-void mode_PORTA_INPUT(unsigned int pin)
-{
-	DDRA &= ~_BV(pin);
-}
 
-void mode_PORTA_OUTPUT(unsigned int pin)
-{
-	DDRA |= _BV(pin);
-	write_PORTA_LOW(pin);
-}
+void poll_incoming_commands() {
+	// poll for incoming commands
+	int command, previous_command;
+	
+	while(1){
+		command = (int) uart1_getchar();
+		//uart_putchar(uart1_getchar());
+		
+		if(command != previous_command) {
+			previous_command = command;
+			
+			switch(command) {
+			
+				case 0: // servo1left = 0
+					servo_1_dir = backward;
+					break;
+				case 1: // servo1right = 1
+					servo_1_dir = forward;
+					break;
+				case 2: //// servo1stopped = 2
+					servo_1_dir = stopped;
+					break;
 
-void write_PORTA_HIGH(unsigned int pin)
-{
-	PORTA |= _BV(pin);
-}
+				case 16: // servo2left = 16
+					servo_2_dir = backward;
+					break;
+				case 17: //// servo2left = 17
+					servo_2_dir = forward;
+					break;
+				case 18: // servo2left = 18
+					servo_2_dir = stopped;
+					break;
 
-void write_PORTA_LOW(unsigned int pin)
-{
-	PORTA &= ~_BV(pin);
-}
+				case 32: // roomba1for == 32
+					roomba1_dir = right;
+					break;
+				case 33: // roomba1back == 33
+					roomba1_dir = left;
+					break;
+				case 34: // roomba1stop == 34
+					roomba1_dir = stopped;
+					break;
+				case 35: // roomba1forfast == 35
+					roomba1_dir = right_fast;
+					break;
+				case 36: // roomba1backfast == 36
+					roomba1_dir = left_fast;
+					break;
 
-int read_PORTA(unsigned int pin)
-{
-	int val = PINA & _BV(pin);
-	return val;
+				case 48: // roomba2for == 48
+					roomba2_dir = backward;
+					break;
+				case 49: // roomba2back == 49
+					roomba2_dir = forward;
+					break;
+				case 50: // roomba2stop == 50
+					roomba2_dir = stopped;
+					break;
+				case 51: // roomba2forfast == 51
+					roomba2_dir = forward_fast;
+					break;
+				case 52: // roomba2backfast == 52
+					roomba2_dir = backward_fast;
+					break;
+				
+				case 64: // 64 == firelaser
+				case 65: // 65 == offlaser
+					fire_laser(command);
+					break;
+				
+				default:
+					break;
+			}
+		}
+		
+		Task_Next();
+	}
 }
 
 void fire_laser(int command) {
 	if (command == offlaser) {
-		write_PORTA_LOW(laser_activation_pin); //pin MUST be on port A !!!!!!!!
-		} else if(command == firelaser) {
-		write_PORTA_HIGH(laser_activation_pin); //pin MUST be on port A
+		PORTA &= ~(1<<PA3); // PIN 25 
+	} else if(command == firelaser) {
+		PORTA |= (1<<PA3); // PIN 25 FOR LASER
 	}
 }
 
-static unsigned int servo_target;
+void turn_servo_right(void){
+	if(OCR3C >= 130)
+		return;
+	OCR3C += 1;
+}
+
+void turn_servo_left(void){
+	if(OCR3C <= 65)
+		return;
+	OCR3C -= 1;
+}
+
+void turn_servo_2_right(void){
+	if(OCR4C >= 130)
+		return;
+	OCR4C += 1;
+}
+
+void turn_servo_2_left(void){
+	if(OCR4C <= 65)
+		return;
+	OCR4C -= 1;
+}
+
+void move_servo()
+{
+	while(1){
+			if(servo_1_dir == forward)
+				turn_servo_right();
+			else if(servo_1_dir == backward)
+				turn_servo_left();
+			else if(servo_2_dir == forward)
+				turn_servo_2_left();
+			else if(servo_2_dir == backward)
+				turn_servo_2_right();
+			Task_Next();
+	}
+}
+
+void turn_roomba_right() {
+	Roomba_Drive(100, -1);
+}
+
+void turn_roomba_left() {
+	Roomba_Drive(100, 1);
+}
+
+void move_roomba_forward() {
+	Roomba_Drive(-100, 32768);
+}
+
+void move_roomba_backward() {
+	Roomba_Drive(100, 32768);
+}
+
+void stop_roomba() {
+	Roomba_Drive(0, 0);
+}
+
+void move_roomba_forward_left() {
+	Roomba_Drive(100, -100);
+}
+
+void move_roomba_forward_right() {
+	Roomba_Drive(100, 100);
+}
+
+void move_roomba_backward_left() {
+	Roomba_Drive(-100, 100);
+}
+
+void move_roomba_backward_right() {
+	Roomba_Drive(-100, -100);
+}
+
+void turn_roomba_right_fast() {
+	Roomba_Drive(200, -1);
+}
+
+void turn_roomba_left_fast() {
+	Roomba_Drive(200, 1);
+}
+
+void move_roomba_forward_fast() {
+	Roomba_Drive(200, 32768);
+}
+
+void move_roomba_backward_fast() {
+	Roomba_Drive(-200, 32768);
+}
+
+void move_roomba_forward_left_fast() {
+	Roomba_Drive(200, 100);
+}
+
+void move_roomba_forward_right_fast() {
+	Roomba_Drive(200, -100);
+}
+
+void move_roomba_backward_left_fast() {
+	Roomba_Drive(-200, -100);
+}
+
+void move_roomba_backward_right_fast() {
+	Roomba_Drive(-200, 100);
+}
+
+void move_roomba() {
+	while(1){
+		if (roomba1_dir == right_fast && roomba2_dir == forward_fast || roomba1_dir == right && roomba2_dir == forward_fast || roomba1_dir == right_fast && roomba2_dir == forward) {
+			move_roomba_forward_right_fast();
+			} else if (roomba1_dir == left_fast && roomba2_dir == forward_fast || roomba1_dir == left && roomba2_dir == forward_fast || roomba1_dir == left_fast && roomba2_dir == forward) {
+			move_roomba_forward_left_fast();
+			} else if (roomba1_dir == right_fast && roomba2_dir == backward_fast || roomba1_dir == right && roomba2_dir == backward_fast || roomba1_dir == right_fast && roomba2_dir == backward) {
+			move_roomba_backward_right_fast();
+			} else if (roomba1_dir == left_fast && roomba2_dir == backward_fast || roomba1_dir == left && roomba2_dir == backward_fast || roomba1_dir == left_fast && roomba2_dir == backward) {
+			move_roomba_backward_left_fast();
+			} else if (roomba2_dir == backward_fast) {
+			move_roomba_backward_fast();
+			} else if (roomba2_dir == forward_fast) {
+			move_roomba_forward_fast();
+			} else if (roomba1_dir == right_fast) {
+			turn_roomba_right_fast();
+			} else if (roomba1_dir == left_fast) {
+			turn_roomba_left_fast();
+			} else if (roomba2_dir == backward) {
+			move_roomba_backward();
+			} else if (roomba2_dir == forward) {
+			move_roomba_forward();
+			} else if (roomba1_dir == right) {
+			turn_roomba_right();
+			} else if (roomba1_dir == left) {
+			turn_roomba_left();
+		}
+
+		if (roomba1_dir == stopped && roomba2_dir == stopped) {
+			stop_roomba();
+		}
+		Task_Next();
+	}
+}
 
 int servo_timer_init() {
 	
 	//Set PE5 (pin 3) to output
 	//(If we wanted to write to the pin use 'PORTB |= (1<<PB7)' to turn it on, and 'PORTB &= ~(1<<PB7)' to turn it off.
 	// For the purposes of this example the pin will be controlled directly by timer 1.
-	DDRE = (1<<PB5);
-	
+	DDRE = (1<<PE5);
+
 	//PWM
 	//Clear timer config
 	TCCR3A = 0;
@@ -146,61 +326,69 @@ int servo_timer_init() {
 	TCCR3B |= (1<<CS32);
 	
 	OCR3A = 1250;  //20 ms period
+	OCR3C = 95;
+}
+
+int servo_timer_init2() {
 	
+	//Set PH5 (pin 8) to output
+	//(If we wanted to write to the pin use 'PORTB |= (1<<PB7)' to turn it on, and 'PORTB &= ~(1<<PB7)' to turn it off.
+	// For the purposes of this example the pin will be controlled directly by timer 1.
+	DDRH = (1<<PH5);
+
+	//PWM
+	//Clear timer config
+	TCCR4A = 0;
+	TCCR4B = 0;
+	TIMSK4 &= ~(1<<OCIE4C);
+	//Set to Fast PWM (mode 15)
+	TCCR4A |= (1<<WGM40) | (1<<WGM41);
+	TCCR4B |= (1<<WGM42) | (1<<WGM43);
+	
+	//Enable output C.
+	TCCR4A |= (1<<COM4C1);
+	//prescaler
+	TCCR4B |= (1<<CS42);
+	
+	OCR4A = 1250;  //20 ms period
+	OCR4C = 95;
 }
 
 void servo_init(){
 	servo_timer_init();
-	servo_target = 95;
+	servo_timer_init2();
+	Task_Terminate();
 }
 
-void turn_servo_right(void){
-	if(servo_target >= 130)
-		return;
-	OCR3C += 1;
-}
-
-void turn_servo_left(void){
-	if(servo_target <= 65)
-		return;
-	OCR3C -= 1;
-}
-
-void move_servo()
+void serial_init()
 {
-	//Slowly incrase the duty cycle of the LED.
-	// Could change OCR1A to increase/decrease the frequency also.
-
-	while(1){
-		if(OCR3C != servo_target){
-			if(OCR3C < servo_target)
-				turn_servo_right();
-			else if(OCR3C > servo_target)
-				turn_servo_left();
-			Task_Next();
-		}
-	}
+	// initialize serial communication at 19 200 bits per second:
+	uart_init();
+	uart1_init();
+	Roomba_Init();
+	Task_Terminate();
 }
 
-/*
-void move_servo_left(Servo servo) {
-	int pos = servo.read();
-
-	if (pos > 5) {
-		servo.write(pos - 1);
-	}
+void pin_init()
+{
+	// initialize laser related pins
+	mode_PORTA_OUTPUT(laser_activation_pin);
+	init_ADC();
+	Task_Terminate();
 }
 
-void move_servo_right(Servo servo) {
-	int pos = servo.read();
-
-	if (pos < 170) {
-		servo.write(pos + 1);
-	}
-}
-*/
 void a_main()
 {
 	Task_Create_System(servo_init, 0);
-	Task_Create_Period(move_servo, 0, 2, 1, 0);
+	Task_Create_System(serial_init, 0);
+	Task_Create_System(pin_init, 0);
+	Task_Create_RR(move_servo, 0);
+	DDRB |= (1<<PB3);
+	DDRB |= (1<<PB2);
+	PORTB &= ~(1<<PB2);
+	//PORTB |= (1<<PB3);
+	Task_Create_Period(poll_incoming_commands, 0, 4, 2, 2);
+	Task_Create_Period(move_roomba, 0, 15, 1, 10);
+	//Task_Create_RR(send_status, 0);
+	Task_Terminate();
 }

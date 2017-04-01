@@ -10,5 +10,9 @@ src\os.c
 
 src\queue.c
 
+src\roomba.c
+
 src\uart.c
+
+src\utils.c
 
