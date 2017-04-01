@@ -148,7 +148,6 @@ void poll_incoming_commands() {
 				default:
 					break;
 			}
-			
 		}
 		
 		Task_Next();
@@ -389,7 +388,7 @@ void a_main()
 	PORTB &= ~(1<<PB2);
 	//PORTB |= (1<<PB3);
 	Task_Create_Period(poll_incoming_commands, 0, 4, 2, 2);
-	//Task_Create_RR(move_roomba, 0);
+	Task_Create_Period(move_roomba, 0, 15, 1, 10);
 	//Task_Create_RR(send_status, 0);
 	Task_Terminate();
 }
