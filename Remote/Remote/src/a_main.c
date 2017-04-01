@@ -342,7 +342,7 @@ void a_main()
 	Task_Create_System(servo_init, 0);
 	Task_Create_System(serial_init, 0);
 	Task_Create_System(pin_init, 0);
-	//Task_Create_RR(move_servo, 0);
+	Task_Create_RR(move_servo, 0);
 	DDRB |= (1<<PB3);
 	DDRB |= (1<<PB2);
 	PORTB &= ~(1<<PB2);
