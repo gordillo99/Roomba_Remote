@@ -1,5 +1,3 @@
-// this was used as reference https://onlineacademiccommunity.uvic.ca/csc460/
-
 #include <string.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -47,11 +45,6 @@ extern void Enter_Kernel();
 static PD Process[MAXTHREAD];
 
 /**
-  * The number of ticks since the system began
-  */
-PID time_since_system_start;
-
-/**
   * The process descriptor of the currently RUNNING task.
   */
 volatile static PD* Cp; 
@@ -97,14 +90,9 @@ volatile int PeriodicCount = 0;
 volatile PD *RRQueue[MAXTHREAD];
 volatile int RRCount = 0;
 
-/* The array of channel descriptors */
 volatile static CD ChannelArray[MAXCHAN];
 volatile unsigned int Channels = 0;
 
-/*
- * idle tasks to be called when there is nothing else to run
- * it has lowest priority
- */
 static void idle (void)
 {
 	for(;;)
@@ -133,7 +121,6 @@ PID Kernel_Create_Task_At( volatile PD *p, voidfuncptr f, PRIORITY priority, int
 	//Store terminate at the bottom of stack to protect against stack underrun.
 	*(unsigned char *)sp-- = ((unsigned int)Task_Terminate) & 0xff;
 	*(unsigned char *)sp-- = (((unsigned int)Task_Terminate) >> 8) & 0xff;
-	*(unsigned char *)sp-- = 0x00; // make the task forcefully go to Task_Terminate() when the task returns
 
 	//Place return address of function at bottom of stack
 	*(unsigned char *)sp-- = ((unsigned int)f) & 0xff;
@@ -141,8 +128,7 @@ PID Kernel_Create_Task_At( volatile PD *p, voidfuncptr f, PRIORITY priority, int
 	*(unsigned char *)sp-- = 0x00; // Fix 17 bit address problem for PC
 
 	sp = sp - 34;
-	
-	// set all necessary variables regarding new task
+	  
 	p->sp = sp;     /* stack pointer into the "workSpace" */
 	p->code = f;        /* function to be executed as a task */
 	p->request = NONE;
@@ -155,14 +141,11 @@ PID Kernel_Create_Task_At( volatile PD *p, voidfuncptr f, PRIORITY priority, int
 	p->period = period;
 	p->wcet = wcet;
 
-	// increase respective counters
 	Tasks++;
 	pCount++;
 
-	// set as ready to run
 	p->state = READY;
 
-	// enqueue in respective queue according to priority
 	if (priority == SYSTEM) {
 		enqueue(&p, &SysQueue, &SysCount);
 	} else if (priority == PERIODIC) {
@@ -202,46 +185,30 @@ static void Kernel_Terminate_Task() {
 	Tasks--;
 }
 
-/*
- * checks to see if 2 or more periodic tasks are ready to run at the same time
- */
-void CheckTimingViolation() {
-	int l;
-	int counter = 0;
-	// count number of periodic tasks ready to run
-	for (l = PeriodicCount - 1; l >= 0; l--)  {
-		if (PeriodicQueue[l]->countdown == 0) counter++;
-	}
-	if (counter > 1) OS_Abort(1); // timing violation (2 or more periodic tasks are supposed to run at the same time)
-}
-
 /**
   * This internal kernel function is the "scheduler". It chooses the 
   * next task to run, i.e., Cp.
   */
 static void Dispatch() {
-	CheckTimingViolation(); // check for timing violations
-	Cp = dequeue(&SysQueue, &SysCount); // try the sys queue first
+	Cp = dequeue(&SysQueue, &SysCount);
 	if (PeriodicCount != 0) {
 		volatile PD *temp = peek(&PeriodicQueue, &PeriodicCount);
-		if (temp->countdown == 0) { // if it is time to run periodic task
-			if (Cp == NULL) { // point current process at per task if there is no sys task to run
+		if (temp->countdown == 0) {
+			if (Cp == NULL) {
 				Cp = dequeue(&PeriodicQueue, &PeriodicCount);
 			} 
 		}
 	}
 
-	if(Cp == NULL) { // if there are no sys or per tasks to run, run RR
+	if(Cp == NULL) {
 		Cp = dequeue(&RRQueue, &RRCount);
 	}
 
-	if (Cp == NULL) { // if there are no tasks to run, run idle
+	if (Cp == NULL) {
 		Cp = &Process[0]; // run idle task
 	}
 
-	// point stack at where the new current process needs it
 	CurrentSp = Cp->sp;
-	// change state of new current process to running
 	Cp->state = RUNNING;
 }
 
@@ -270,28 +237,20 @@ static void Next_Kernel_Request() {
 		Cp->sp = CurrentSp;
 
 		switch(Cp->request){
-		case CREATE: // should not be needed
+		case CREATE:
 			Cp->response = Kernel_Create_Task( Cp->code, Cp->priority, Cp->arg, -1, -1, -1);
 			break;
-		case CREATE_PERIODIC: // creates new periodic task
-			Cp->response = Kernel_Create_Task( Cp->code, PERIODIC, Cp->arg, Cp->offset, Cp->wcet, Cp->period);
-			if(Cp->priority == RR && Cp->offset == 0){
-				Cp->request = NEXT;
-				goto cnext;
-			}
+		case CREATE_SYS:
+			Cp->response = Kernel_Create_Task( Cp->code, SYSTEM, Cp->arg, -1, -1, -1);
 			break;
-		case CREATE_RR: // creates new rr task
+		case CREATE_PERIODIC:
+			Cp->response = Kernel_Create_Task( Cp->code, PERIODIC, Cp->arg, Cp->offset, Cp->wcet, Cp->period);
+			break;
+		case CREATE_RR:
 			Cp->response = Kernel_Create_Task( Cp->code, RR, Cp->arg, -1, -1, -1);
 			break;
-		case CREATE_SYS: // creates new system task
-			Cp->response = Kernel_Create_Task( Cp->code, SYSTEM, Cp->arg, -1, -1, -1);
-			if(Cp->priority == SYSTEM) 
-				break;
-			else
-				Cp->request = NEXT;
-cnext:	case NEXT:
-			Cp->state = READY; // set process to be enqueued as ready to run
-			// enqueue in appropriate queue
+		case NEXT:
+			Cp->state = READY;
 			if (Cp->priority == SYSTEM) {
 				enqueue(&Cp, &SysQueue, &SysCount);
 			} else if (Cp->priority == PERIODIC) {
@@ -299,26 +258,23 @@ cnext:	case NEXT:
 			} else if (Cp->priority == RR) {
 				enqueue(&Cp, &RRQueue, &RRCount);
 			}
-			Dispatch(); // get next task to run
+			Dispatch();
 			break;
 		case NONE:
 			break;
-		case CHECK_TIME_VIOLATION:
-			CheckTimingViolation(); //check for timing violations
-			break;
 		case SEND:
-			kernel_send(); // send info via CSP
+			kernel_send();
 			break;
 		case ASYNC_SEND:
-			kernel_async_send(); // send info async via CSP
+			kernel_async_send();
 			break;
 		case RECEIVE:
-			kernel_receive(); // receive info via CSP
+			kernel_receive();
 			break;
 		case TERMINATE:
 			/* deallocate all resources used by this task */
 			Kernel_Terminate_Task();
-			Dispatch(); // get next task to run
+			Dispatch();
 			break;
 
 		default:
@@ -343,14 +299,12 @@ void OS_Init() {
 	KernelActive = 0;
 	pCount = 0;
 
-	// set all processes as dead
 	for (x = 0; x < MAXTHREAD; x++) {
 		memset(&(Process[x]),0,sizeof(PD));
 		Process[x].state = DEAD;
 		Process[x].processID = 0;
 	}
 
-	//set all channels as uninitialized
 	for (x = 0; x < MAXCHAN; x++) {
 		memset(&(ChannelArray[x]),0,sizeof(CD));
 		ChannelArray[x].state = UNITIALIZED;
@@ -375,34 +329,12 @@ void OS_Start() {
   * Just quits
   */
 void OS_Abort(unsigned int error) {
-	// set pin to high to indicate error
-	PORTC |= (1<<PC7);
-	PORTC &= ~(1<<PC7);
-
-	// TODO: add respective codes here
-	switch (error) {
-		case 1:
-			//TIMING VIOLATION
-			break;
-		case 2:
-			//ERROR IN TASK CREATE
-			break;
-		case 3:
-			// WCET > PERIOD
-			break;
-		case 4:
-			// running time exceeded WCET 
-			break;
-		case 5:
-			// periodic task using csp function
-			break;
-		case 6:
-			// csp function error
-			break;
-		default:
-			// unknown error
-			break;
-	}
+	PORTB |= (1<<PB3);
+	PORTB ^= (1<<PB3);
+	PORTB |= (1<<PB3);
+	PORTB ^= (1<<PB3);
+	PORTB |= (1<<PB3);
+	PORTB ^= (1<<PB3);
 	exit(1);
 }
 
@@ -415,8 +347,6 @@ PID Task_Create(voidfuncptr f, PRIORITY priority, int arg,  int offset,  int wce
 	if (KernelActive) {
 		Disable_Interrupt();
 	
-		// set the right request for the kernel
-		// based on processes' priority
 		if (priority == SYSTEM) {
 			Cp->request = CREATE_SYS;
 		} else if (priority == PERIODIC) {
@@ -425,31 +355,18 @@ PID Task_Create(voidfuncptr f, PRIORITY priority, int arg,  int offset,  int wce
 		} else if (priority == RR) {
 			Cp->request = CREATE_RR;
 		} else {
-			OS_Abort(2);
+			OS_Abort(1);
 		}
 
-		// set info to pass to kernel
 		Cp->code = f;
-		//PRIORITY og_priority = Cp->priority;
-		//Cp->priority = priority;
-		int og_arg = Cp->arg;
+		Cp->priority = priority;
 		Cp->arg = arg;
-		int og_offset = Cp->offset;
-		int og_wcet = Cp->wcet;
-		int og_period = Cp->period;
 		Cp->offset = offset;
 		Cp->wcet = wcet;
 		Cp->period = period;
 		
 		Enter_Kernel();
-
-		// restore the Cp to original values
 		p = Cp->response;
-		//Cp->priority = og_priority; 
-		Cp->offset = og_offset;
-		Cp->wcet = og_wcet;
-		Cp->period = og_period;
-		Cp->arg = og_arg;
 	} else { 
 	  /* call the RTOS function directly */
 	  p = Kernel_Create_Task( f, priority, arg, -1, -1, -1);
@@ -457,19 +374,14 @@ PID Task_Create(voidfuncptr f, PRIORITY priority, int arg,  int offset,  int wce
 	return p;
 }
 
-// creates system task
 PID Task_Create_System(void (*f)(void), int arg){		
 	return Task_Create(f, SYSTEM, arg, -1,-1,-1);		
 }		
-
-// creates per task
 PID Task_Create_RR(void (*f)(void), int arg){		
 	return Task_Create(f, RR, arg, -1,-1,-1);		
-}	
-
-// creates rr task	
+}		
 PID Task_Create_Period(void (*f)(void), int arg, TICK period, TICK wcet, TICK offset){		
-	if(wcet >= period) OS_Abort(3);	// as required wcet < period
+	if(wcet >= period) OS_Abort(1);			
 	return Task_Create(f, PERIODIC, arg, offset, wcet, period);		
 }		
 /**		
@@ -478,8 +390,7 @@ PID Task_Create_Period(void (*f)(void), int arg, TICK period, TICK wcet, TICK of
 PID Task_Create_Idle(){		
 	unsigned int p;		
 	if (KernelActive) {		
-		Disable_Interrupt();
-		// set appropriate priority and code for idle	
+		Disable_Interrupt();		
 		Cp->code = idle;		
 		Cp->priority = IDLE;		
 		Cp->arg = 0;		
@@ -494,39 +405,32 @@ PID Task_Create_Idle(){
 
 /**
   * Application level task next to setup system call to give up CPU
-  *	equivalent to yield
   */
 void Task_Next() {
 	if (KernelActive) {
 		Disable_Interrupt();
-		// set the info for periodic so that it runs on time
 		if (Cp->priority == PERIODIC) {
 			Cp->countdown = Cp->period - Cp->runningTime;
 			Cp->runningTime = 0;
 		}
-		// set kernel request to next
 		Cp->request = NEXT;
 		Enter_Kernel();
 	}
 }
 
 /*
- *	Function called by ISR to schedule next task according to current priority
- */
+	Function called by ISR to schedule next task according to current priority
+*/
 void Run_Next() {
 	if (KernelActive) {
 		Disable_Interrupt();
-		// system task will not be preempted, but check no time violation 
-		// was caused by them
-		if (Cp->priority == SYSTEM) Cp->request = CHECK_TIME_VIOLATION;
+		if (Cp->priority == SYSTEM) Cp->request = NONE;
 		else if (Cp->priority == PERIODIC) {
-			// as requested by reqs, wcet should be less than running time
-			if (Cp->runningTime >= Cp->wcet) {
-				OS_Abort(4); // exceeded worst case running time
-			} else if (SysCount > 0) { // periodic task must be preempted by system task
-				Cp->countdown = 0;
+			if (Cp->runningTime == Cp->wcet || SysCount > 0) {
+				Cp->countdown = Cp->period - Cp->runningTime;
+				Cp->runningTime = 0;
 				Cp->request = NEXT;
-			} else Cp->request = CHECK_TIME_VIOLATION; // check for timing violations
+			} else Cp->request = NONE;
 		} else Cp->request = NEXT;
 		Enter_Kernel();
 	}
@@ -551,18 +455,12 @@ int Task_GetArg() {
 	return (Cp->arg);
 }
 
- // number of milliseconds since the RTOS boots.
-unsigned int Now(){
-	volatile uint16_t t = TCNT1;
-	volatile unsigned int temp = t;
-	volatile float f = ((temp*1.0)/635)*10;
-	return time_since_system_start*10 + (unsigned int)f;
-}
-
 /**
   * Setup pins and timers
   */
 void setup() {
+
+
 	/** initialize Timer1 16 bit timer */
 	Disable_Interrupt();
 
@@ -580,36 +478,42 @@ void setup() {
 
 	TIMSK1 |= (1 << OCIE1A);    /** Enable timer compare interrupt */
 
+	/** Timer 3 */
+	TCCR3A = 0;                 /** Set TCCR0A register to 0 */
+	TCCR3B = 0;                 /** Set TCCR0B register to 0 */
+
+	TCNT3 = 0;                  /** Initialize counter to 0 */
+
+	OCR3A = 62499;              /** Compare match register (TOP comparison value) [(16MHz/(100Hz*8)] - 1 */
+
+	TCCR3B |= (1 << WGM32);     /** Turns on CTC mode (TOP is now OCR1A) */
+
+	TCCR3B |= (1 << CS32);      /** Prescaler 1024 */
+
+	TIMSK3 = (1 << OCIE3A);
+
 	Enable_Interrupt();
 }
 
 /**
-  * ISR for timer1 (every tick [10 ms]) 
+  * ISR for timer1
   */
 ISR(TIMER1_COMPA_vect) { 
 	int i;
-
-	// increase running time of periodic task
-	// useful to prevent it running longer than wcet
-	// and also for rescheduling on time
 	if (Cp->priority == PERIODIC) {
 		Cp->runningTime++;
 	}
 
-	time_since_system_start++; // used for Now()
-
-	// decrease countdown for all periodic task
-	// min val of countdown is 0
-	for (i = PeriodicCount-1; i >= 0; i--) 
-		if (PeriodicQueue[i]->countdown > 0) 
-			PeriodicQueue[i]->countdown -= 1;
+	for (i = PeriodicCount-1; i >= 0; i--) PeriodicQueue[i]->countdown -= 1;
 	Run_Next();
 }
 
 /**
-  * ISR for timer3 (every second)
+  * ISR for timer3
   */
-
+ISR(TIMER3_COMPA_vect) { // PERIOD: 1 s
+	tickOverflowCount += 1;
+}
 
 /*
  * A CHAN is a one-way communication channel between at least two tasks. It must be
@@ -635,153 +539,97 @@ ISR(TIMER1_COMPA_vect) {
 	return ChannelArray[x].channelID;
  }
 
-
- /*
-  * function for sending synchronously.
-  * sender will be blocked if receiver(s) not present
-  */
 void Send(CHAN ch, int v) {
-	if (Cp->priority == PERIODIC) OS_Abort(5); // periodic tasks are not allowed to use csp
-	if (ChannelArray[ch - 1].state == UNITIALIZED) OS_Abort(6); // trying to use unitialized channel
+	if (Cp->priority == PERIODIC) OS_Abort(1); // periodic tasks are not allowed to use csp
 	Cp->request = SEND;
 	Cp->senderChannel = ch;
-	Cp->val = v; // val to pass to receivers
+	Cp->val = v;
 	Enter_Kernel();
 }
 
-/*
- * kernel actually sending info between processes using channel
- * also blocks sender if no receivers waiting
- * or it unblocks receivers if they are waiting
- */
 void kernel_send() {
-	BOOL sys_task_ready = FALSE;
 	if (ChannelArray[Cp->senderChannel - 1].numberReceivers == 0) { // no receivers waiting
 		if (ChannelArray[Cp->senderChannel - 1].sender == NULL) ChannelArray[Cp->senderChannel - 1].sender = Cp;
-		else OS_Abort(6); // cant have more than 1 sender
+		else OS_Abort(1); // cant have more than 1 sender
 
-		Cp->state = BLOCKED; // block sender
-		ChannelArray[Cp->senderChannel - 1].val = Cp->val; // save val to pass to receivers
-		Dispatch(); // get someone else to run
+		Cp->state = BLOCKED;
+		ChannelArray[Cp->senderChannel - 1].val = Cp->val;
+		Dispatch();
 	} else { //receivers are waiting
-		if (ChannelArray[Cp->senderChannel - 1].sender != NULL) OS_Abort(6); // cant have more than 1 sender
-		
+		if (ChannelArray[Cp->senderChannel - 1].sender != NULL) OS_Abort(1); // cant have more than 1 sender
 		int l;
-		// for each receiver, set to ready, pass value from sender, and requeue
 		for (l = ChannelArray[Cp->senderChannel - 1].numberReceivers - 1; l >= 0; l--)  {
 			ChannelArray[Cp->senderChannel - 1].receivers[l]->state = READY;
 			ChannelArray[Cp->senderChannel - 1].receivers[l]->val = Cp->val;
 
 			if (ChannelArray[Cp->senderChannel - 1].receivers[l]->priority == SYSTEM) {
-				sys_task_ready = TRUE;
 				enqueue(&ChannelArray[Cp->senderChannel - 1].receivers[l], &SysQueue, &SysCount);
-			} else if (ChannelArray[Cp->senderChannel - 1].receivers[l]->priority == RR) {
+				} else if (ChannelArray[Cp->senderChannel - 1].receivers[l]->priority == RR) {
 				enqueue(&ChannelArray[Cp->senderChannel - 1].receivers[l], &RRQueue, &RRCount);
 			}
 			ChannelArray[Cp->senderChannel - 1].receivers[l] = NULL;
 			ChannelArray[Cp->senderChannel - 1].numberReceivers--;
 		}
 		ChannelArray[Cp->senderChannel - 1].val = NULL;
-		if (sys_task_ready && Cp->priority == RR) {
-			enqueue(&Cp, &RRQueue, &RRCount);
-			Dispatch();
-		}
 	}
 }
 
-/*
- * function that can be called by processes. calling processes will be blocked
- * if no sender is waiting. also, it unblocks sender if it is waiting
- */
 int Recv(CHAN ch) {
-	if (Cp->priority == PERIODIC) OS_Abort(5); // periodic tasks are not allowed to use csp
-	if (ChannelArray[ch - 1].state == UNITIALIZED) OS_Abort(6); // trying to use unitialized channel
-	Cp->request = RECEIVE; // set kernel request to receive
-	Cp->receiverChannel = ch; // pass to kernel the selected channel
+	if (Cp->priority == PERIODIC) OS_Abort(1); // periodic tasks are not allowed to use csp
+	Cp->request = RECEIVE;
+	Cp->receiverChannel = ch;
 	Enter_Kernel();
-	return Cp->val; //return the received value
+	return Cp->val;
 }
 
-/*
- * function for kernel to actually receive int from sender
- * if no sender is waiting. also, it unblocks sender if it is waiting
- */
 void kernel_receive() {
-	BOOL sys_task_ready = FALSE;
-
 	if (ChannelArray[Cp->receiverChannel - 1].sender == NULL) { // no sender waiting
-		Cp->state = BLOCKED; // block calling process
-		// add current process to receivers array
+		Cp->state = BLOCKED;
 		enqueue(&Cp, &ChannelArray[Cp->receiverChannel - 1].receivers, &ChannelArray[Cp->receiverChannel - 1].numberReceivers);
-		Dispatch(); // get next process to run
-	} else { // sender is waiting
-		// set sender to ready
+		Dispatch();
+		} else { // sender is waiting
 		ChannelArray[Cp->receiverChannel - 1].sender->state = READY;
-		// grab value to be passed from channel
 		Cp->val = ChannelArray[Cp->receiverChannel - 1].val;
 
-		// enqueue sender so it runs again
 		if (ChannelArray[Cp->receiverChannel - 1].sender->priority == SYSTEM) {
-			sys_task_ready = TRUE;
 			enqueue(&ChannelArray[Cp->receiverChannel - 1].sender, &SysQueue, &SysCount);
-		} else if (ChannelArray[Cp->receiverChannel - 1].sender->priority == RR) {
+			} else if (ChannelArray[Cp->receiverChannel - 1].sender->priority == RR) {
 			enqueue(&ChannelArray[Cp->receiverChannel - 1].sender, &RRQueue, &RRCount);
 		}
-		// clear sender and val info
 		ChannelArray[Cp->receiverChannel - 1].sender = NULL;
 		ChannelArray[Cp->senderChannel - 1].val = NULL;
-		if (sys_task_ready && Cp->priority == RR) {
-			enqueue(&Cp, &RRQueue, &RRCount);
-			Dispatch();
-		}
 	}
 }
 
-/*
- *	pretty much the same as Send() except process is not blocked if no receivers are waiting
- */
 void Write(CHAN ch, int v) {
-	if (ChannelArray[ch - 1].state == UNITIALIZED) OS_Abort(6); // trying to use unitialized channel
-
+	if (Cp->priority == PERIODIC) OS_Abort(1); // periodic tasks are not allowed to use csp
 	Cp->request = ASYNC_SEND;
 	Cp->senderChannel = ch;
 	Cp->val = v;
 	Enter_Kernel();
 }
 
-/*
- *	pretty much the same as kernel_send() except process is not blocked if no receivers are waiting
- */
 void kernel_async_send() {
-	BOOL sys_task_ready = FALSE;
-
 	if (ChannelArray[Cp->senderChannel - 1].numberReceivers == 0) { // no receivers waiting
 		if (ChannelArray[Cp->senderChannel - 1].sender == NULL) ChannelArray[Cp->senderChannel - 1].sender = Cp;
-		else OS_Abort(6); // cant have more than 1 sender
+		else OS_Abort(1); // cant have more than 1 sender
 		return; // return without blocking
 	} else { //receivers are waiting
-		// do the same as kernel_send
-		// probably should be abstracted into a separate function to avoid code duplication, but who has time for that
-		if (ChannelArray[Cp->senderChannel - 1].sender != NULL) OS_Abort(6); // cant have more than 1 sender
+		if (ChannelArray[Cp->senderChannel - 1].sender != NULL) OS_Abort(1); // cant have more than 1 sender
 		int l;
 		for (l = ChannelArray[Cp->senderChannel - 1].numberReceivers - 1; l >= 0; l--)  {
 			ChannelArray[Cp->senderChannel - 1].receivers[l]->state = READY;
 			ChannelArray[Cp->senderChannel - 1].receivers[l]->val = Cp->val;
 
 			if (ChannelArray[Cp->senderChannel - 1].receivers[l]->priority == SYSTEM) {
-				sys_task_ready = TRUE;
 				enqueue(&ChannelArray[Cp->senderChannel - 1].receivers[l], &SysQueue, &SysCount);
-			} else if (ChannelArray[Cp->senderChannel - 1].receivers[l]->priority == RR) {
+				} else if (ChannelArray[Cp->senderChannel - 1].receivers[l]->priority == RR) {
 				enqueue(&ChannelArray[Cp->senderChannel - 1].receivers[l], &RRQueue, &RRCount);
 			}
 			ChannelArray[Cp->senderChannel - 1].receivers[l] = NULL;
 			ChannelArray[Cp->senderChannel - 1].numberReceivers--;
 		}
 		ChannelArray[Cp->senderChannel - 1].val = NULL;
-		if (sys_task_ready && Cp->priority == RR) {
-			enqueue(&Cp, &RRQueue, &RRCount);
-			Dispatch();
-		}
 	}
 }
 
@@ -809,14 +657,9 @@ void main() {
 	DDRA |= (1<<PA7);
 	PORTA &= ~(1<<PA7);
 
-	//pin 30
-	DDRC |= (1<<PC7);
-	PORTC &= ~(1<<PC7);
-
 	setup();
 	OS_Init();
 	Task_Create_Idle();
-	Task_Create_System(a_main, 42);
+	Task_Create_System(a_main, 1);
 	OS_Start();
 }
-

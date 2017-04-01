@@ -79,33 +79,32 @@ const int photoresitor_pin = 7;
 
 // GLOBAL STATUS VARIABLES
 BOOL firing_laser = FALSE; // global variable for current state of laser
-volatile int servo_1_dir = 0; // -1 (backward), 0 (static), 1 (forward)
-volatile int servo_2_dir = 0; // -1 (backward), 0 (static), 1 (forward)
-volatile int roomba1_dir = 0;// -1 (backward), 0 (static), 1 (forward)
-volatile int roomba2_dir = 0;// -1 (backward), 0 (static), 1 (forward)
+int servo_1_dir = 0; // -1 (backward), 0 (static), 1 (forward)
+int servo_2_dir = 0; // -1 (backward), 0 (static), 1 (forward)
+int roomba1_dir = 0;// -1 (backward), 0 (static), 1 (forward)
+int roomba2_dir = 0;// -1 (backward), 0 (static), 1 (forward)
 
 //Servo myServo, myServo2; //The two servo motors. myServo attached to digital pin 9 and myServo2 attached to digital pin 8
 
+
 void poll_incoming_commands() {
 	// poll for incoming commands
+	int command, previous_command;
+	
 	while(1){
-		uart_putchar('c');
-		if(uart1_rx == 26116) {
-			int command = (int)uart1_getchar();
-			//Serial.println(command);
+		command = (int)uart1_getchar();
+		if(command != previous_command) {
+			previous_command = command;
+			
 			switch(command) {
-				case 64: // 64 == firelaser
-				case 65: // 65 == offlaser
-					fire_laser(command);
-					break;
 			
 				case 0: // servo1left = 0
 					servo_1_dir = backward;
 					break;
-				case 1: // servo1left = 1
+				case 1: // servo1right = 1
 					servo_1_dir = forward;
 					break;
-				case 2: //// servo1left = 2
+				case 2: //// servo1stopped = 2
 					servo_1_dir = stopped;
 					break;
 
@@ -150,15 +149,18 @@ void poll_incoming_commands() {
 				case 52: // roomba2backfast == 52
 					roomba2_dir = backward_fast;
 					break;
+				
+				case 64: // 64 == firelaser
+				case 65: // 65 == offlaser
+					fire_laser(command);
+					break;
+				
 				default:
 					break;
 			}
-			uart_putchar(roomba1_dir);
-			uart_putchar(roomba2_dir);
+			
 		}
-		if('c' == uart1_getchar()){
-			uart1_putchar('d');
-		}
+		uart1_putchar((char)command);
 		Task_Next();
 	}
 }
@@ -370,8 +372,10 @@ void a_main()
 	Task_Create_System(serial_init, 0);
 	Task_Create_System(Roomba_Init, 0); //Roomba is on pin 13, and uart0
 	Task_Create_System(pin_init, 0);
-	Task_Create_RR(move_servo, 0);
-	Task_Create_RR(poll_incoming_commands, 0);
-	Task_Create_RR(move_roomba, 0);
+	//Task_Create_RR(move_servo, 0);
+	DDRB |= (1<<PB3);
+	PORTB |= (1<<PB3);
+	Task_Create_Period(poll_incoming_commands, 0, 4, 2, 2);
+	//Task_Create_RR(move_roomba, 0);
 	//Task_Create_RR(send_status, 0);
 }
