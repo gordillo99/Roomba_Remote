@@ -80,7 +80,6 @@ void poll_incoming_commands() {
 	int command, previous_command;
 	
 	while(1){
-	PORTB ^= (1<<PB3);
 		command = (int) uart1_getchar();
 		//uart_putchar(uart1_getchar());
 		
@@ -176,6 +175,18 @@ void turn_servo_left(void){
 	OCR3C -= 1;
 }
 
+void turn_servo_2_right(void){
+	if(OCR4C >= 130)
+		return;
+	OCR4C += 1;
+}
+
+void turn_servo_2_left(void){
+	if(OCR4C <= 65)
+		return;
+	OCR4C -= 1;
+}
+
 void move_servo()
 {
 	while(1){
@@ -183,6 +194,10 @@ void move_servo()
 				turn_servo_right();
 			else if(servo_1_dir == backward)
 				turn_servo_left();
+			else if(servo_2_dir == forward)
+				turn_servo_2_left();
+			else if(servo_2_dir == backward)
+				turn_servo_2_right();
 			Task_Next();
 	}
 }
@@ -295,8 +310,8 @@ int servo_timer_init() {
 	//Set PE5 (pin 3) to output
 	//(If we wanted to write to the pin use 'PORTB |= (1<<PB7)' to turn it on, and 'PORTB &= ~(1<<PB7)' to turn it off.
 	// For the purposes of this example the pin will be controlled directly by timer 1.
-	DDRE = (1<<PB5);
-	
+	DDRE = (1<<PE5);
+
 	//PWM
 	//Clear timer config
 	TCCR3A = 0;
@@ -315,8 +330,34 @@ int servo_timer_init() {
 	OCR3C = 95;
 }
 
+int servo_timer_init2() {
+	
+	//Set PH5 (pin 8) to output
+	//(If we wanted to write to the pin use 'PORTB |= (1<<PB7)' to turn it on, and 'PORTB &= ~(1<<PB7)' to turn it off.
+	// For the purposes of this example the pin will be controlled directly by timer 1.
+	DDRH = (1<<PH5);
+
+	//PWM
+	//Clear timer config
+	TCCR4A = 0;
+	TCCR4B = 0;
+	TIMSK4 &= ~(1<<OCIE4C);
+	//Set to Fast PWM (mode 15)
+	TCCR4A |= (1<<WGM40) | (1<<WGM41);
+	TCCR4B |= (1<<WGM42) | (1<<WGM43);
+	
+	//Enable output C.
+	TCCR4A |= (1<<COM4C1);
+	//prescaler
+	TCCR4B |= (1<<CS42);
+	
+	OCR4A = 1250;  //20 ms period
+	OCR4C = 95;
+}
+
 void servo_init(){
 	servo_timer_init();
+	servo_timer_init2();
 	Task_Terminate();
 }
 
