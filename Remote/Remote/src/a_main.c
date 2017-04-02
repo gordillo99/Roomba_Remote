@@ -65,12 +65,22 @@ const int left_fast = 7;
 const int laser_activation_pin = 25; // the number of the laster activation pin
 const int photoresitor_pin = 7;
 
+// constants for type of control
+typedef enum roomba_states {
+	MANUAL,
+	AUTONOMOUS
+} STATUS;
+
 // GLOBAL STATUS VARIABLES
 volatile BOOL firing_laser = FALSE; // global variable for current state of laser
 volatile int servo_1_dir = 0; // -1 (backward), 0 (static), 1 (forward)
 volatile int servo_2_dir = 0; // -1 (backward), 0 (static), 1 (forward)
 volatile int roomba1_dir = 0;// -1 (backward), 0 (static), 1 (forward)
 volatile int roomba2_dir = 0;// -1 (backward), 0 (static), 1 (forward)
+volatile STATUS roomba_status = MANUAL;
+
+volatile int bump_state = 0;
+volatile int wall_state = 0;
 
 //Servo myServo, myServo2; //The two servo motors. myServo attached to digital pin 9 and myServo2 attached to digital pin 8
 
@@ -189,15 +199,15 @@ void turn_servo_2_left(void){
 void move_servo()
 {
 	while(1){
-			if(servo_1_dir == forward)
-				turn_servo_right();
-			else if(servo_1_dir == backward)
-				turn_servo_left();
-			else if(servo_2_dir == forward)
-				turn_servo_2_left();
-			else if(servo_2_dir == backward)
-				turn_servo_2_right();
-			Task_Next();
+		if(servo_1_dir == forward)
+			turn_servo_right();
+		else if(servo_1_dir == backward)
+			turn_servo_left();
+		else if(servo_2_dir == forward)
+			turn_servo_2_left();
+		else if(servo_2_dir == backward)
+			turn_servo_2_right();
+		Task_Next();
 	}
 }
 
@@ -271,35 +281,54 @@ void move_roomba_backward_right_fast() {
 
 void move_roomba() {
 	while(1){
-		if (roomba1_dir == right_fast && roomba2_dir == forward_fast || roomba1_dir == right && roomba2_dir == forward_fast || roomba1_dir == right_fast && roomba2_dir == forward) {
-			move_roomba_forward_right_fast();
-			} else if (roomba1_dir == left_fast && roomba2_dir == forward_fast || roomba1_dir == left && roomba2_dir == forward_fast || roomba1_dir == left_fast && roomba2_dir == forward) {
-			move_roomba_forward_left_fast();
-			} else if (roomba1_dir == right_fast && roomba2_dir == backward_fast || roomba1_dir == right && roomba2_dir == backward_fast || roomba1_dir == right_fast && roomba2_dir == backward) {
-			move_roomba_backward_right_fast();
-			} else if (roomba1_dir == left_fast && roomba2_dir == backward_fast || roomba1_dir == left && roomba2_dir == backward_fast || roomba1_dir == left_fast && roomba2_dir == backward) {
-			move_roomba_backward_left_fast();
-			} else if (roomba2_dir == backward_fast) {
-			move_roomba_backward_fast();
-			} else if (roomba2_dir == forward_fast) {
-			move_roomba_forward_fast();
-			} else if (roomba1_dir == right_fast) {
-			turn_roomba_right_fast();
-			} else if (roomba1_dir == left_fast) {
-			turn_roomba_left_fast();
-			} else if (roomba2_dir == backward) {
-			move_roomba_backward();
-			} else if (roomba2_dir == forward) {
-			move_roomba_forward();
-			} else if (roomba1_dir == right) {
-			turn_roomba_right();
-			} else if (roomba1_dir == left) {
-			turn_roomba_left();
-		}
+		if (wall_state) roomba_status = AUTONOMOUS;
+		else roomba_status = MANUAL; 
 
-		if (roomba1_dir == stopped && roomba2_dir == stopped) {
-			stop_roomba();
+		if (roomba_status == MANUAL) {
+			if (roomba1_dir == right_fast && roomba2_dir == forward_fast || roomba1_dir == right && roomba2_dir == forward_fast || roomba1_dir == right_fast && roomba2_dir == forward) {
+				move_roomba_forward_right_fast();
+			} else if (roomba1_dir == left_fast && roomba2_dir == forward_fast || roomba1_dir == left && roomba2_dir == forward_fast || roomba1_dir == left_fast && roomba2_dir == forward) {
+				move_roomba_forward_left_fast();
+			} else if (roomba1_dir == right_fast && roomba2_dir == backward_fast || roomba1_dir == right && roomba2_dir == backward_fast || roomba1_dir == right_fast && roomba2_dir == backward) {
+				move_roomba_backward_right_fast();
+			} else if (roomba1_dir == left_fast && roomba2_dir == backward_fast || roomba1_dir == left && roomba2_dir == backward_fast || roomba1_dir == left_fast && roomba2_dir == backward) {
+				move_roomba_backward_left_fast();
+			} else if (roomba2_dir == backward_fast) {
+				move_roomba_backward_fast();
+			} else if (roomba2_dir == forward_fast) {
+				move_roomba_forward_fast();
+			} else if (roomba1_dir == right_fast) {
+				turn_roomba_right_fast();
+			} else if (roomba1_dir == left_fast) {
+				turn_roomba_left_fast();
+			} else if (roomba2_dir == backward) {
+				move_roomba_backward();
+			} else if (roomba2_dir == forward) {
+				move_roomba_forward();
+			} else if (roomba1_dir == right) {
+				turn_roomba_right();
+			} else if (roomba1_dir == left) {
+				turn_roomba_left();
+			}
+
+			if (roomba1_dir == stopped && roomba2_dir == stopped) {
+				stop_roomba();
+			}
+		} else { // AUTONOMOUS BEHAVIOR
+			move_roomba_backward_fast();
 		}
+	
+		Task_Next();
+	}
+}
+
+void get_sensor_data() {
+	for(;;) {
+		Roomba_QueryList(7, 13);
+
+		bump_state = uart_getchar();
+		wall_state = uart_getchar();
+
 		Task_Next();
 	}
 }
@@ -387,8 +416,10 @@ void a_main()
 	DDRB |= (1<<PB2);
 	PORTB &= ~(1<<PB2);
 	//PORTB |= (1<<PB3);
+	//PORTB |= (1<<PB3);
 	Task_Create_Period(poll_incoming_commands, 0, 4, 2, 2);
 	Task_Create_Period(move_roomba, 0, 15, 1, 10);
-	//Task_Create_RR(send_status, 0);
+	Task_Create_Period(get_sensor_data, 0, 20, 19, 4);
+
 	Task_Terminate();
 }

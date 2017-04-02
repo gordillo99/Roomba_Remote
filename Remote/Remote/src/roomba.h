@@ -21,6 +21,8 @@ typedef enum _rsg
 #define HIGH_BYTE(x) (x>>8)
 #define LOW_BYTE(x)  (x&0xFF)
 
+#define QUERYLIST       149
+
 /**
  * Connect to the Roomba at 38400 baud and put it into safe mode.
  */

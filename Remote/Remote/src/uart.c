@@ -40,8 +40,12 @@ void uart_putchar (char c)
 
 char uart_getchar()
 {
-    while(!(UCSR2A & (1<<RXC2)));
-    return UDR2;
+	int x = 0;
+	while(!(UCSR2A & (1<<RXC2))){
+		x++;
+		if (x > 10000) return '\n';
+	}
+	return UDR2;
 }
 
 void uart_putstr(char *s)

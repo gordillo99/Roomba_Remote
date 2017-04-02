@@ -93,6 +93,13 @@ void Roomba_UpdateSensorPacket(ROOMBA_SENSOR_GROUP group, roomba_sensor_data_t* 
 	}
 }
 
+void Roomba_QueryList(uint8_t packet1, uint8_t packet2) {
+	uart_putchar(QUERYLIST);
+	uart_putchar(2);
+	uart_putchar(packet1);
+	uart_putchar(packet2);
+}
+
 void Roomba_Drive(int16_t velocity, int16_t radius )
 {
 	uart_putchar(DRIVE);

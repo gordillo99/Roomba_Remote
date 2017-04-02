@@ -329,12 +329,8 @@ void OS_Start() {
   * Just quits
   */
 void OS_Abort(unsigned int error) {
-	PORTB |= (1<<PB3);
-	PORTB ^= (1<<PB3);
-	PORTB |= (1<<PB3);
-	PORTB ^= (1<<PB3);
-	PORTB |= (1<<PB3);
-	PORTB ^= (1<<PB3);
+	//PORTB |= (1<<PB3);
+	
 	exit(1);
 }
 
