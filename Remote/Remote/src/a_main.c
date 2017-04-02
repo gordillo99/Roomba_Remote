@@ -416,9 +416,10 @@ void a_main()
 	DDRB |= (1<<PB2);
 	PORTB &= ~(1<<PB2);
 	//PORTB |= (1<<PB3);
+	//PORTB |= (1<<PB3);
 	Task_Create_Period(poll_incoming_commands, 0, 4, 2, 2);
 	Task_Create_Period(move_roomba, 0, 15, 1, 10);
-	Task_Create_Period(get_sensor_data, 0, 2, 1, 0);
-	//Task_Create_RR(send_status, 0);
+	Task_Create_Period(get_sensor_data, 0, 20, 19, 4);
+
 	Task_Terminate();
 }
