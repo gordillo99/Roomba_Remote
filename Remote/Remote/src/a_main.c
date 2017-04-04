@@ -198,15 +198,24 @@ void turn_servo_2_left(void){
 
 void move_servo()
 {
+	int x = 0;
 	while(1){
-		if(servo_1_dir == forward)
-			turn_servo_right();
-		else if(servo_1_dir == backward)
-			turn_servo_left();
-		else if(servo_2_dir == forward)
-			turn_servo_2_left();
-		else if(servo_2_dir == backward)
-			turn_servo_2_right();
+		if(x == 0){
+			if(servo_1_dir == forward)
+				turn_servo_right();
+			else if(servo_1_dir == backward)
+				turn_servo_left();
+			else if(servo_2_dir == forward)
+				turn_servo_2_left();
+			else if(servo_2_dir == backward)
+				turn_servo_2_right();
+			x++;
+		}
+		else{
+			x++;
+			if(x >= 200)
+				x = 0;
+		}
 		Task_Next();
 	}
 }
