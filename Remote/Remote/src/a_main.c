@@ -248,35 +248,35 @@ void move_roomba_backward_right() {
 }
 
 void turn_roomba_right_fast() {
-	Roomba_Drive(200, -1);
+	Roomba_Drive(400, -1);
 }
 
 void turn_roomba_left_fast() {
-	Roomba_Drive(200, 1);
+	Roomba_Drive(400, 1);
 }
 
 void move_roomba_forward_fast() {
-	Roomba_Drive(200, 32768);
+	Roomba_Drive(400, 32768);
 }
 
 void move_roomba_backward_fast() {
-	Roomba_Drive(-200, 32768);
+	Roomba_Drive(-400, 32768);
 }
 
 void move_roomba_forward_left_fast() {
-	Roomba_Drive(200, 100);
+	Roomba_Drive(400, 100);
 }
 
 void move_roomba_forward_right_fast() {
-	Roomba_Drive(200, -100);
+	Roomba_Drive(400, -100);
 }
 
 void move_roomba_backward_left_fast() {
-	Roomba_Drive(-200, -100);
+	Roomba_Drive(-400, -100);
 }
 
 void move_roomba_backward_right_fast() {
-	Roomba_Drive(-200, 100);
+	Roomba_Drive(-400, 100);
 }
 
 void move_roomba() {
@@ -301,15 +301,7 @@ void move_roomba() {
 				turn_roomba_right_fast();
 			} else if (roomba1_dir == left) {
 				turn_roomba_left_fast();
-			} /*else if (roomba2_dir == backward) {
-				move_roomba_backward();
-			} else if (roomba2_dir == forward) {
-				move_roomba_forward();
-			} else if (roomba1_dir == right) {
-				turn_roomba_right();
-			} else if (roomba1_dir == left) {
-				turn_roomba_left();
-			}*/
+			} 
 
 			if (roomba1_dir == stopped && roomba2_dir == stopped) {
 				stop_roomba();
