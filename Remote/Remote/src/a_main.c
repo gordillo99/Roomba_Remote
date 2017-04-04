@@ -281,7 +281,7 @@ void move_roomba_backward_right_fast() {
 
 void move_roomba() {
 	while(1){
-		if (wall_state) roomba_status = AUTONOMOUS;
+		if (wall_state || (bump_state >= 1 && bump_state <= 3)) roomba_status = AUTONOMOUS;
 		else roomba_status = MANUAL; 
 
 		if (roomba_status == MANUAL) {
