@@ -285,23 +285,23 @@ void move_roomba() {
 		else roomba_status = MANUAL; 
 
 		if (roomba_status == MANUAL) {
-			if (roomba1_dir == right_fast && roomba2_dir == forward_fast || roomba1_dir == right && roomba2_dir == forward_fast || roomba1_dir == right_fast && roomba2_dir == forward) {
+			if (roomba1_dir == right && roomba2_dir == forward || roomba1_dir == right && roomba2_dir == forward_fast || roomba1_dir == right_fast && roomba2_dir == forward) {
 				move_roomba_forward_right_fast();
-			} else if (roomba1_dir == left_fast && roomba2_dir == forward_fast || roomba1_dir == left && roomba2_dir == forward_fast || roomba1_dir == left_fast && roomba2_dir == forward) {
+			} else if (roomba1_dir == left && roomba2_dir == forward || roomba1_dir == left && roomba2_dir == forward_fast || roomba1_dir == left_fast && roomba2_dir == forward) {
 				move_roomba_forward_left_fast();
-			} else if (roomba1_dir == right_fast && roomba2_dir == backward_fast || roomba1_dir == right && roomba2_dir == backward_fast || roomba1_dir == right_fast && roomba2_dir == backward) {
+			} else if (roomba1_dir == right && roomba2_dir == backward || roomba1_dir == right && roomba2_dir == backward_fast || roomba1_dir == right_fast && roomba2_dir == backward) {
 				move_roomba_backward_right_fast();
-			} else if (roomba1_dir == left_fast && roomba2_dir == backward_fast || roomba1_dir == left && roomba2_dir == backward_fast || roomba1_dir == left_fast && roomba2_dir == backward) {
+			} else if (roomba1_dir == left && roomba2_dir == backward || roomba1_dir == left && roomba2_dir == backward_fast || roomba1_dir == left_fast && roomba2_dir == backward) {
 				move_roomba_backward_left_fast();
-			} else if (roomba2_dir == backward_fast) {
-				move_roomba_backward_fast();
-			} else if (roomba2_dir == forward_fast) {
-				move_roomba_forward_fast();
-			} else if (roomba1_dir == right_fast) {
-				turn_roomba_right_fast();
-			} else if (roomba1_dir == left_fast) {
-				turn_roomba_left_fast();
 			} else if (roomba2_dir == backward) {
+				move_roomba_backward_fast();
+			} else if (roomba2_dir == forward) {
+				move_roomba_forward_fast();
+			} else if (roomba1_dir == right) {
+				turn_roomba_right_fast();
+			} else if (roomba1_dir == left) {
+				turn_roomba_left_fast();
+			} /*else if (roomba2_dir == backward) {
 				move_roomba_backward();
 			} else if (roomba2_dir == forward) {
 				move_roomba_forward();
@@ -309,7 +309,7 @@ void move_roomba() {
 				turn_roomba_right();
 			} else if (roomba1_dir == left) {
 				turn_roomba_left();
-			}
+			}*/
 
 			if (roomba1_dir == stopped && roomba2_dir == stopped) {
 				stop_roomba();
